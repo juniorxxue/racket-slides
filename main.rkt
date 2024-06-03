@@ -27,7 +27,7 @@
          "lib/util.rkt")
 
 
-(define CONFERENCE-NAME "Huawei, Hangzhou")
+(define CONFERENCE-NAME "Hangzhou")
 
 ;; ---------------------------------------------------------------------------------------------------
 
@@ -653,19 +653,5 @@
      @item{Scalabilities are necessary.}
      @item{Implementation can be easily derived}
      ))
-
-  (slides ([s:bullet 0])
-    #:timeline (tl:sequence s:bullet 5)
-    #:with current-para-spacing '(lines 0.4)
-    #:with current-para-fill? #f
-    #:with current-para-width 900
-    (vc-append     
-     (blank 0 50)
-     (paras
-      #:stage (s:bullet)
-      @item{Initial proposal in early 2020; revised version accepted in late 2020.}
-      @item{Implementation in limbo for several years.}
-      @item{Started at Tweag last year; patch landed last fall.}
-      @item{Finally released this past March in GHC 9.6!})))
   )
 
