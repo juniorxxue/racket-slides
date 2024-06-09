@@ -12,6 +12,9 @@
          ;; rsvg
          slideshow/code
          slideshow/text
+         ;; latex
+         "latex-pict/main.rkt"
+         
         
          syntax/parse/define
          threading
@@ -27,7 +30,8 @@
          "lib/util.rkt")
 
 
-(define CONFERENCE-NAME "Hangzhou")
+(define CONFERENCE-NAME "ICFP'24")
+(current-preamble "\\RequirePackage[libertine]{newtxmath}\n\\usepackage{mathpartir}")
 
 ;; ---------------------------------------------------------------------------------------------------
 
@@ -604,7 +608,8 @@
 
 (slides ()
   (~> (vc-append title
-                 (~> (filled-rectangle (+ (pict-width title) 40) 1 #:draw-border? #f)
+                 (filled-rectangle (+ (pict-width title) 40) 1 #:draw-border? #f)
+                 #;(~> (filled-rectangle (+ (pict-width title) 40) 1 #:draw-border? #f)
                      (inset 0 -5 0 5))
                  (with-size 30
                    (hflex (+ (pict-width title) 20)
@@ -618,29 +623,12 @@
                         (t "Contextual Typing")))
                     (colorize text-plain-color))))
 
-(define (progress-list #:completed [completed 0]
-                       #:focus [focus #f])
-  (define (focus-color n v)
-    (if (and focus (not (= focus n)))
-        text-secondary-color
-        v))
-  (define (check n)
-    (pict-when (> completed n)
-      @elem[#:color (focus-color n (->color% (hsv 0.38 0.79 0.76)))]{✓}))
-  (~> (for/list ([label (in-list '("continuations" "delimited" "first-class" "native"))]
-                 [color (in-list '(#f 0 1 2))]
-                 [index (in-naturals)])
-        (~> (elem #:color (focus-color index (and~> color flavor-text-color)) label)
-            (when~> (and focus (= focus index))
-                    highlight)
-            (elem " " (check index))))
-      (apply ol _)))
 
 (begin
   (section "Background")
 
   (slides ([s:bullet 0])
-    #:timeline (tl:sequence s:bullet 5)
+    #:timeline (tl:sequence s:bullet 6)
     #:with current-para-spacing '(lines 0.5)
     #:with current-para-fill? #f
     #:with current-para-width 1200
@@ -651,7 +639,19 @@
      @item{Local information is good.}
      @item{Having guidelines for langauge designers and programmers is good.}
      @item{Scalabilities are necessary.}
-     @item{Implementation can be easily derived}
+     @item{Implementation can be easily derived.}
      ))
-  )
 
+  (slides ([s:bullet 0])
+   #:timeline (tl:sequence s:bullet 3)
+   #:with current-para-spacing '(lines 0.5)
+   #:with current-para-fill? #f
+   #:with current-para-width 1200
+   #:title "Bidirectional Typing"
+   (paras
+    #:stage (s:bullet)
+    @item{Merge type inference and type checking by two modes;}
+    @item{Types are propogated to neighbouring expressions;}   
+    ;@mathpar[#:scale 3]{\inferrule*[right=\texttt{Int}]{\Gamma \vdash e_1 \Rightarrow A \to B \\ \Gamma \vdash e_2 \Leftarrow A}{\Gamma \vdash e_1~e_2 \Rightarrow B} @"\n\n" \inferrule*[right=\texttt{Int}]{\Gamma \vdash e_1 \Rightarrow A \to B}{\Gamma \vdash e_1~e_2 \Rightarrow B} }
+    )
+))
