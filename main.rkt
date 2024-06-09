@@ -31,7 +31,7 @@
 
 
 (define CONFERENCE-NAME "ICFP'24")
-(current-preamble "\\RequirePackage[libertine]{newtxmath}\n\\usepackage{mathpartir}")
+(current-preamble "\\RequirePackage[libertine]{newtxmath}\n\\usepackage{mathpartir}\n\\usepackage{xcolor}")
 
 ;; ---------------------------------------------------------------------------------------------------
 
@@ -230,15 +230,31 @@
  exclaim x = show x ++ "!"})
 
   (slide
-   #:title "Test Balloon"
+   #:title "Balloon"
    (~> @haskell{@p:call True}
        (pin-balloon p:call cb-find (scale (p:exclaim) 0.75)
                     #:spike-position 0.45
                     #:show? #t)
        (inset 0 0 0 150)))
   
+ 
+
+  (define p:qtas @tex-math[#:scale 4]{\Gamma \vdash_n e : A})
+  (define p:algo @tex-math[#:scale 4]{\Gamma \vdash \Sigma \Rightarrow e \Rightarrow A})
+  
   (slide
    #:title "Our Proposal: Contextual Typing"
-   
-   )
-  )
+   'next
+   @item{Quantitative Type Assignment Systems (QTASs)}
+   'next
+   (indent #:by (em 2) (item (~> p:qtas
+                                 (pin-balloon p:qtas (adjust-find cb-find -23 0) (scale (t "Counter: quantifies how much information we know from the context") 0.5) #:spike-position 0.45 #:spike-size 10)                   
+                                 (inset 0 0 0 80))))
+   'next
+   @item{Algorithmic Type System}
+   'next
+   (indent #:by (em 2) (item (~> p:algo
+                                 (pin-balloon p:algo (adjust-find cb-find -50 0) (scale (t "Context: precisely captures the information of surrounding context") 0.5) #:spike-position 0.45 #:spike-size 10)                   
+                                 (inset 0 0 0 80))))
+    )
+   )  
