@@ -651,7 +651,11 @@
    (paras
     #:stage (s:bullet)
     @item{Merge type inference and type checking by two modes;}
-    @item{Types are propogated to neighbouring expressions;}   
-    ;@mathpar[#:scale 3]{\inferrule*[right=\texttt{Int}]{\Gamma \vdash e_1 \Rightarrow A \to B \\ \Gamma \vdash e_2 \Leftarrow A}{\Gamma \vdash e_1~e_2 \Rightarrow B} @"\n\n" \inferrule*[right=\texttt{Int}]{\Gamma \vdash e_1 \Rightarrow A \to B}{\Gamma \vdash e_1~e_2 \Rightarrow B} }
-    )
-))
+    @item{Types are propogated to neighbouring expressions;}
+    ))
+
+  (slide
+   #:title "Typing Rules"
+   @mathpar[#:scale 3]{\inferrule*[right=\texttt{Arr}]{\Gamma \vdash e_1 \Rightarrow A \to B \\ \Gamma \vdash e_2 \Leftarrow A}{\Gamma \vdash e_1~e_2 \Rightarrow B} @"\n\n" \inferrule*[right=\texttt{Lam}]{\Gamma, x : A \vdash e \Rightarrow B}{\Gamma \vdash \lambda x.~e \Leftarrow A \to B} }
+  )
+  )
