@@ -22,7 +22,7 @@
          (prefix-in racket: racket/base)
          (prefix-in slideshow: slideshow/base)
          (only-in slideshow [current-font-size current-text-size])
-
+         "lib/balloon.rkt"
          "lib/color.rkt"
          "lib/pict.rkt"
          "lib/slideshow.rkt"
@@ -134,119 +134,6 @@
  (λ (s) (parameterize ([current-main-font "Concourse C3"])
           (colorize (t (string-downcase s)) text-plain-color))))
 
-;; ---------------------------------------------------------------------------------------------------
-
-(define slides-prompt-tag (make-continuation-prompt-tag 'slides))
-(define current-slide-render (make-parameter (thunk (error 'current-slide-render "no slide renderer"))))
-
-(struct slide-info (title body skippable?) #:transparent
-  #:guard (struct-guard/c (or/c string? pict? #f) pict? any/c))
-
-(define (call-with-slide-renderer render-thunk body-thunk #:title [title #f])
-  (define skipped 0)
-  (parameterize ([current-slide-render render-thunk])
-    (let loop ([continue-thunk body-thunk])
-      (call-with-continuation-prompt
-       continue-thunk slides-prompt-tag
-       (λ (info continue)
-         (cond
-           [(and condense? (slide-info-skippable? info))
-            (set! skipped (add1 skipped))
-            (loop continue)]
-           [else
-            ; add a bunch of 'nexts to the slide to tell slideshow that some slides were dropped,
-            ; which will cause it to display a range for the slide number
-            (apply slide (append (make-list skipped 'next) (list (slide-info-body info)))
-                   #:title (slide-info-title info)
-                   #:name (section)
-                   #:layout 'top)
-            (set! skipped 0)
-            (loop continue)])))))
-  (skip-slides skipped))
-
-(define (add-slide! info)
-  (call-with-composable-continuation
-   (λ (continue)
-     (abort-current-continuation slides-prompt-tag
-                                 info
-                                 (thunk (continue (void)))))
-   slides-prompt-tag))
-
-(define (render-slide! #:skippable? skippable?)
-  (define-values [title body] ((current-slide-render)))
-  (add-slide! (slide-info title body (and skippable? #t))))
-(define (next)  (render-slide! #:skippable? #t))
-(define (next!) (render-slide! #:skippable? #f))
-
-(define-syntax-parser slides
-  [(_ ({~describe "binding pair" [x:id e:expr]} ...)
-      {~alt {~seq #:with param:expr param-val:expr}
-            {~optional {~seq #:title title-e:expr}}
-            {~once {~var render-e (expr/c #'pict? #:name "render expression")}}
-            {~optional {~seq #:timeline timeline-body:expr ...+}}
-            {~optional {~and #:condense-last {~bind [condense-last? #t]}}}}
-      ...
-      {~optional {~seq #:where ~! where-body:expr ...}})
-
-   (define stx this-syntax)
-   (define-template-metafunction maybe-tl:last!
-     (syntax-parser
-       [(_ body ...) (if (attribute condense-last?)
-                         (syntax/loc stx (let () body ...))
-                         (syntax/loc stx (tl:last! body ...)))]))
-
-   (quasisyntax/loc this-syntax
-     (let ([x (make-parameter e)] ...)
-       (parameterize ([c:highlights (c:highlights)]
-                      [param param-val] ...)
-         (call-with-slide-renderer
-          #,(syntax/loc #'render-e (thunk {~? {~@ where-body ...}} (values {~? title-e #f} render-e)))
-          #,(syntax/loc this-syntax (thunk {~? (maybe-tl:last! {~@ timeline-body ...}) (next!)} (void)))))))])
-
-(define (blank-slide)
-  (slide #:name (section) #:condense? #t))
-
-;; ---------------------------------------------------------------------------------------------------
-
-(define (tl:last!/proc continue)
-  (define prev #f)
-  (begin0
-    (let loop ([continue continue])
-      (call-with-continuation-prompt
-       continue slides-prompt-tag
-       (λ (info continue)
-         (when prev (add-slide! prev))
-         (set! prev info)
-         (loop continue))))
-    (if prev
-        (add-slide! (struct-copy slide-info prev [skippable? #f]))
-        (error 'tl:last! "timeline did not yield"))))
-
-(define-simple-macro (tl:last! body ...+)
-  (tl:last!/proc (thunk body ...)))
-
-(define (tl:sequence param seq)
-  (for ([v seq])
-    (param v)
-    (next)))
-
-(define (tl:flags #:set [val #t] . params)
-  (for ([param (in-list params)])
-    (param val)
-    (next)))
-
-(define (tl:show . params)
-  (apply tl:flags #:set show params))
-
-(define (c:highlight+ which)
-  (if (list? which)
-      (c:highlights (append which (c:highlights)))
-      (c:highlights (cons which (c:highlights)))))
-
-(define (tl:highlight+ . whichs)
-  (for ([which (in-list whichs)])
-    (c:highlight+ which)
-    (next)))
 
 ;; ---------------------------------------------------------------------------------------------------
 
@@ -282,380 +169,76 @@
   (parameterize ([current-code-tt haskell-code-tt])
     (apply code elems)))
 
-(define (matht str)
-  (text str "Blackboard Modern Math" (current-text-size)))
-
-(define (mathv str)
-  (matht (apply string (for/list ([c (in-string str)])
-                         (math-char c #:italic? #t)))))
-
-(define (mathit str)
-  (text str (cons 'italic "Blackboard Modern Roman") (current-text-size)))
-
-(define (basic-step #:ip ip #:leaf? [leaf? #t] . lines)
-  (~> (for/list ([(line i) (in-indexed lines)])
-        (define redex? (and leaf? (= i ip)))
-        (hc-append
-         (pict-when redex?
-           (~> (arrow-line #:arrow-size 20 #:line-length 0)
-               (colorize text-plain-color)))
-         (blank 5 0)
-         (if (< i ip)
-             (colorize (apply code line) text-tertiary-color)
-             (tag (if redex? 'redex 'continuation) (apply haskell line)))))
-      (apply vl-append (current-code-line-sep) _)))
-
-(define (ol #:sep [sep (em 4/5)]
-            #:spacing [spacing (current-para-spacing)]
-            #:stage [stage #f]
-            . elems)
-  (define num-picts (parameterize ([current-main-font "Concourse T3"])
-                      (for/list ([i (in-range (length elems))])
-                        (c:plain (t (~a (add1 i)))))))
-  (define max-num-width (apply max (map pict-width num-picts)))
-  (~>> (for/list ([elem (in-list elems)]
-                  [num (in-list num-picts)])
-         (htl-append sep (indent #:by (- max-num-width (pict-width num)) num) elem))
-       (apply paras #:spacing spacing #:stage stage)))
-
-(define current-shape-border-width (make-parameter 2))
-
-(define (spike size #:border-width [border-width (current-shape-border-width)])
-  (define s/2 (/ size 2))
-  (define path (new dc-path%))
-  (send path move-to 0 0)
-  (send path line-to s/2 s/2)
-  (send path line-to size 0)
-  (dc (λ (dc x y)
-        (define old-pen (send dc get-pen))
-        (define old-brush (send dc get-brush))
-        (send dc set-pen (make-pen #:width border-width
-                                   #:color shape-border-color))
-        (send dc set-brush (make-brush #:color shape-bg-color))
-        (send dc draw-path path x y)
-        (send dc set-pen old-pen)
-        (send dc set-brush old-brush))
-      size
-      s/2))
-
-(define (box w h
-             #:highlight [highlight-tag #f]
-             #:border-width [border-width (current-shape-border-width)])
-  (define highlight? (member highlight-tag (c:highlights)))
-  (filled-rectangle w h
-                    #:color (if highlight? (tag-highlight-color highlight-tag) shape-bg-color)
-                    #:border-width border-width
-                    #:border-color (if highlight? (tag-text-color highlight-tag) shape-border-color)))
-
-(define current-box-padding (make-parameter 15))
-(define (wrap-box p
-                  #:padding [padding (current-box-padding)]
-                  #:highlight [highlight-tag #f])
-  (cc-superimpose (box (+ (pict-width p) (* padding 2))
-                       (+ (pict-height p) (* padding 2))
-                       #:highlight highlight-tag)
-                  p))
-
-(define (balloon w h
-                 #:corner-radius [r 25]
-                 #:spike-size [spike-s 25]
-                 #:spike-position [spike-posn 0]
-                 #:spike-side [spike-side 'top]
-                 #:color [color shape-bg-color]
-                 #:border-color [border-color shape-border-color]
-                 #:border-width [bw (current-shape-border-width)]
-                 #:highlight [highlight-tag #f])
-  (define 2spike-s (* 2 spike-s))
-  (define spike-side-type (match spike-side
-                            [(or 'top 'bottom) 'horizontal]
-                            [(or 'left 'right) 'vertical]))
-  (define spike-side-len (match spike-side-type
-                           ['horizontal w]
-                           ['vertical   h]))
-  (define spike-offset (* spike-posn (- spike-side-len 2spike-s)))
-  (define posn-after-spike (+ spike-offset 2spike-s))
-  (define len-after-spike (- spike-side-len (+ spike-offset 2spike-s)))
-
-  (define tl-r (cond
-                 [(eq? spike-side 'left)   (min r spike-offset)]
-                 [(eq? spike-side 'top)    (min r spike-offset)]
-                 [else                     r]))
-  (define tr-r (cond
-                 [(eq? spike-side 'right)  (min r spike-offset)]
-                 [(eq? spike-side 'top)    (min r len-after-spike)]
-                 [else                     r]))
-  (define bl-r (cond
-                 [(eq? spike-side 'left)   (min r len-after-spike)]
-                 [(eq? spike-side 'bottom) (min r spike-offset)]
-                 [else                     r]))
-  (define br-r (cond
-                 [(eq? spike-side 'right)  (min r len-after-spike)]
-                 [(eq? spike-side 'bottom) (min r len-after-spike)]
-                 [else                     r]))
-  
-  (define path (new dc-path%))
-  ; top left corner
-  (send path arc 0 0 tl-r tl-r (turns 1/2) (turns 1/4) #f)
-  ; top side
-  (when (eq? spike-side 'top)
-    (send path line-to spike-offset 0)
-    (send path line-to (+ spike-offset spike-s) (- spike-s))
-    (send path line-to (+ spike-offset 2spike-s) 0))
-  (send path line-to tr-r 0)
-  ; top right corner
-  (send path arc (- w tr-r) 0 tr-r tr-r (turns 1/4) 0 #f)
-  ; right side
-  (when (eq? spike-side 'right)
-    (send path line-to w spike-offset)
-    (send path line-to (+ w spike-s) (+ spike-offset spike-s))
-    (send path line-to w (+ spike-offset 2spike-s)))
-  (send path line-to w br-r)
-  ; bottom right corner
-  (send path arc (- w br-r) (- h br-r) br-r br-r 0 (turns -1/4) #f)
-  ; bottom side
-  (when (eq? spike-side 'bottom)
-    (send path line-to posn-after-spike h)
-    (send path line-to (- posn-after-spike spike-s) (+ h spike-s))
-    (send path line-to (- posn-after-spike 2spike-s) h))
-  (send path line-to bl-r h)
-  ; bottom left corner
-  (send path arc 0 (- h bl-r) bl-r bl-r (turns 3/4) (turns 1/2) #f)
-  ; left side
-  (when (eq? spike-side 'left)
-    (send path line-to 0 posn-after-spike)
-    (send path line-to spike-s (- posn-after-spike spike-s))
-    (send path line-to 0 (- posn-after-spike 2spike-s)))
-  (send path close)
-
-  (define highlight? (member highlight-tag (c:highlights)))
-  (define color* (if highlight? (tag-highlight-color highlight-tag) color))
-  (define border-color* (if highlight? (tag-text-color highlight-tag) border-color))
-
-  (~> (dc (λ (dc dx dy) (send dc draw-path path dx (+ dy spike-s))) w (+ h spike-s))
-      (inset 0 (- spike-s) 0 0)
-      (adjust-pen #:color border-color* #:width bw)
-      (maybe-colorize color*)))
-
-(define (encircle p
-                  #:padding [padding 15]
-                  #:highlight? [highlight? #f]
-                  #:color [color (if highlight? (current-highlight-color) shape-bg-color)]
-                  #:border-color [border-color (if highlight? (current-highlight-border-color) shape-border-color)]
-                  #:border-width [border-width 2])
-  (~> (disk (+ (max (pict-width p) (pict-height p))
-               (* (+ padding (/ border-width 2)) 2))
-            #:color color
-            #:border-width border-width
-            #:border-color border-color)
-      (cc-superimpose p)))
-
-(define (p:file p
-                #:color [color shape-bg-color]
-                #:border-color [border-color shape-border-color])
-  (cc-superimpose (~> (file-icon 40 50)
-                      (adjust-pen #:color border-color
-                                  #:width 1.25
-                                  #:cap 'projecting
-                                  #:join 'miter)
-                      (colorize color))
-                  (~> (scale-to-fit p 25 35)
-                      (colorize text-secondary-color))))
-
-(define terminal-text-color (->color% (hsv 0 0 0.93)))
-(define terminal-bg-color (->color% (hsv 0 0 0.2)))
-(define terminal-highlight-color (->color% (hsv 0 0.3 0.4)))
-(define (wrap-terminal-frame p #:padding [padding 20])
-  (cc-superimpose
-   (filled-rounded-rectangle (+ (pict-width p) (* padding 2))
-                             (+ (pict-height p) (* padding 2))
-                             15
-                             #:draw-border? #f
-                             #:color terminal-bg-color)
-   (colorize p terminal-text-color)))
-
-(define (strikethrough p
-                       #:line-width [line-width 2]
-                       #:color [color #f])
-  (pin-over p 0 (- (* (pict-ascent p) 3/4) (/ line-width 2))
-            (filled-rectangle (pict-width p) line-width #:draw-border? #f #:color color)))
-
-(define (cross-out p
-                   #:line-width [line-width 2]
-                   #:color [color #f])
-  (define w (pict-width p))
-  (define h (pict-height p))
-  (~> p
-      (pin-over p cc-find #:hole cc-find
-                (adjust-pen #:width line-width #:color color (line w h)))
-      (pin-over p cc-find #:hole cc-find
-                (adjust-pen #:width line-width #:color color (line w (- h))))))
-
-(define (steps #:append p-append
-               #:stage stage
-               . ps)
-  (~> (for/list ([(p i) (in-indexed (in-list ps))])
-        (pict-when (> stage i) p))
-      (apply p-append _)))
-
-(define (pin-arrow-tail base-p src-path find-src dest-path find-dest
-                        #:start-angle [start-angle #f]
-                        #:end-angle [end-angle #f]
-                        #:start-pull [start-pull 1/4]
-                        #:end-pull [end-pull 1/4]
-                        #:color [color text-secondary-color])
-  (pin-line base-p
-            (find-child base-p src-path) find-src
-            (find-child base-p dest-path) find-dest
-            #:line-width 2.5
-            #:color color
-            #:start-angle start-angle
-            #:end-angle end-angle
-            #:start-pull start-pull
-            #:end-pull end-pull))
-
-(define (pin-arrow base-p src-path find-src dest-path find-dest
-                   #:start-angle [start-angle #f]
-                   #:end-angle [end-angle #f]
-                   #:start-pull [start-pull 1/4]
-                   #:end-pull [end-pull 1/4]
-                   #:color [color text-secondary-color])
-  (pin-arrow-line 15 base-p
-                  (find-child base-p src-path) find-src
-                  (find-child base-p dest-path) find-dest
-                  #:line-width 2.5
-                  #:color color
-                  #:start-angle start-angle
-                  #:end-angle end-angle
-                  #:start-pull start-pull
-                  #:end-pull end-pull))
-
-(define (reduction-arrow)
-  (~> (arrow-line #:arrow-size 15
-                  #:line-length 25
-                  #:line-width 2.5)
-      (colorize text-secondary-color)))
-
-(define (reduction-steps
-         #:stage [stage +inf.0]
-         #:arrow [arrow-p (~> (reduction-arrow)
-                              (rotate (turns 3/4)))]
-         #:margin [margin 5]
-         . ps)
-  (match ps
-    ['() (blank)]
-    [(cons p ps)
-     (~> (for/list ([p (in-list ps)])
-           (vc-append (inset arrow-p 0 margin) p))
-         (apply steps p _
-                #:append vc-append
-                #:stage stage))]))
-
-(define (e_1)
-  (define base-p (mathv "e"))
-  (~> (hbl-append base-p (lift-bottom-relative-to-baseline (scale (matht "1") 0.6) -10))
-      (refocus base-p)
-      (inset 0 0 15 0)))
-(define (e_2)
-  (define base-p (mathv "e"))
-  (~> (hbl-append base-p (lift-bottom-relative-to-baseline (scale (matht "2") 0.6) -10))
-      (refocus base-p)
-      (inset 0 0 15 0)))
-
-(define (E #:base [base-p (mathv "E")]
-           #:tag [t #f]
-           . elems)
-  (line-append
-   (hbl-append
-    (~> base-p (when~> t (tag t _)))
-    (matht "["))
-   (apply elem #:color #f elems)
-   (matht "]")))
-
-(define (E_1 #:tag [tag #f] . elems)
-  (define base-p (mathv "E"))
-  (~> (hbl-append base-p (lift-bottom-relative-to-baseline (scale (matht "1") 0.6) -10))
-      (refocus base-p)
-      (inset 0 0 10 0)
-      (apply E elems #:base _ #:tag tag)))
-
-(define (E_2 #:tag [tag #f] . elems)
-  (define base-p (mathv "E"))
-  (~> (hbl-append base-p (lift-bottom-relative-to-baseline (scale (matht "2") 0.6) -10))
-      (refocus base-p)
-      (inset 0 0 10 0)
-      (apply E elems #:base _ #:tag tag)))
-
-(define (delay-highlight-proc thunk tag)
-  (if (member tag (c:highlights))
-      (parameterize ([c:highlights (remove tag (c:highlights))])
-        (highlight (thunk)
-                   #:path tag
-                   #:color (tag-highlight-color tag)))
-      (thunk)))
-
-(define-syntax-parse-rule (delay-highlight pict-e:expr tag-e:expr)
-  (delay-highlight-proc (λ () pict-e) tag-e))
-
-(define (hole #:color [color text-plain-color])
-  (~> (disk 0.8 #:draw-border? #f #:color color)
-      (lift-above-baseline -0.1)
-      (scale (current-text-size))
-      (tag 'hole _)))
-
 ;; ---------------------------------------------------------------------------------------------------
 
 (section "Title")
 
-(slides ()
-  (~> (vc-append title
+(define title (~> (with-size 150
+                    (with-font "Concourse C2"
+                      (t "Contextual Typing")))
+                  (colorize text-plain-color)))
+
+(define delcont (with-font "Concourse C3"
+                  (htl-append @t{Contextual} (blank 30 0) @t{Typing})))
+
+(slide
+ (~> (vc-append title
                  (filled-rectangle (+ (pict-width title) 40) 1 #:draw-border? #f)
-                 #;(~> (filled-rectangle (+ (pict-width title) 40) 1 #:draw-border? #f)
-                     (inset 0 -5 0 5))
                  (with-size 30
                    (hflex (+ (pict-width title) 20)
                           (t "Xu Xue, HKUPLG") (spring 1) (t CONFERENCE-NAME))))
-      (colorize text-secondary-color))
-  #:where
-  (define delcont (with-font "Concourse C3"
-                    (htl-append @t{Contextual} (blank 30 0) @t{Typing})))
- (define title (~> (with-size 150
-                      (with-font "Concourse C2"
-                        (t "Contextual Typing")))
-                    (colorize text-plain-color))))
-
+      (colorize text-secondary-color)))
 
 (begin
   (section "Background")
 
-  (slides ([s:bullet 0])
-    #:timeline (tl:sequence s:bullet 6)
-    #:with current-para-spacing '(lines 0.5)
-    #:with current-para-fill? #f
-    #:with current-para-width 1200
+  (slide
     #:title "Type inference and what we believe"
-    (paras
-     #:stage (s:bullet)
-     @item{Having reasonable and meaningful annotations is good.}
-     @item{Local information is good.}
-     @item{Having guidelines for langauge designers and programmers is good.}
-     @item{Scalabilities are necessary.}
-     @item{Implementation can be easily derived.}
-     ))
-
-  (slides ([s:bullet 0])
-   #:timeline (tl:sequence s:bullet 3)
-   #:with current-para-spacing '(lines 0.5)
-   #:with current-para-fill? #f
-   #:with current-para-width 1200
-   #:title "Bidirectional Typing"
-   (paras
-    #:stage (s:bullet)
-    @item{Merge type inference and type checking by two modes;}
-    @item{Types are propogated to neighbouring expressions;}
-    ))
+    @item{Having reasonable and meaningful annotations is good.}
+    @item{Local information is good.}
+    @item{Having guidelines for langauge designers and programmers is good.}
+    @item{Scalabilities are necessary.}
+    @item{Implementation can be easily derived.}
+    )
 
   (slide
-   #:title "Typing Rules"
-   @mathpar[#:scale 3]{\inferrule*[right=\texttt{Arr}]{\Gamma \vdash e_1 \Rightarrow A \to B \\ \Gamma \vdash e_2 \Leftarrow A}{\Gamma \vdash e_1~e_2 \Rightarrow B} @"\n\n" \inferrule*[right=\texttt{Lam}]{\Gamma, x : A \vdash e \Rightarrow B}{\Gamma \vdash \lambda x.~e \Leftarrow A \to B} }
+   #:title "Bidirectional Typing"
+   @item{Merge type inference and type checking by two modes;}
+   'next
+   (indent #:by (em 2) @item{Inference mode: @tex-math[#:scale 4]{\Gamma \vdash e \Rightarrow A}})
+   'next
+   (indent #:by (em 2) @item{Checking mode: @tex-math[#:scale 4]{\Gamma \vdash e \Leftarrow A}})
+   'next
+   @item{Types are propogated to neighbouring expressions;}
+   )
+
+  (slide
+   #:title "Bidirectional Typing: Problems Statement"
+   @item{Trade-off between expressive power and backtracking;}
+   (indent #:by (em 2) @item{more expressive, less syntax-directness;})
+   (indent #:by (em 2) @item{all-or-nothing inference strategy;})
+   @item{Unclear annotatability and rule duplication;}
+   @item{Inexpressive subsumption.}
   )
+
+  (define p:call @haskell{exclaim})
+  (define p:expr @haskell{@p:call True})
+
+  (define (p:exclaim)
+    @haskell{
+ exclaim :: Show a => a -> String
+ exclaim x = show x ++ "!"})
+
+  (slide
+   #:title "Test Balloon"
+   (~> @haskell{@p:call True}
+       (pin-balloon p:call cb-find (scale (p:exclaim) 0.75)
+                    #:spike-position 0.45
+                    #:show? #t)
+       (inset 0 0 0 150)))
+  
+  (slide
+   #:title "Our Proposal: Contextual Typing"
+   
+   )
   )
