@@ -2,11 +2,11 @@
 
 (require pict/color)
 (require "theme.rkt")
-(require slideshow/step)
+(require "code.rkt")
 (require pict/face)
 
-;(require "latex-pict/main.rkt")
-;(current-preamble "\\RequirePackage[libertine]{newtxmath}\n\\usepackage{mathpartir}\n\\usepackage{xcolor}")
+(require "latex-pict/main.rkt")
+(current-preamble "\\RequirePackage[libertine]{newtxmath}\n\\usepackage{mathpartir}\n\\usepackage{xcolor}")
 
 (define happyface
   (scale (face 'happy) 0.2))
@@ -27,10 +27,12 @@
   (darkblue (t txt)))
 
 (define ($ txt)
-  (tex-math #:scale 3 txt))
+  (tex-math #:scale 4 txt))
   
+#;(define (tex-math #:scale num txt)
+  (t txt))
 
-(define (tex-math #:scale num txt)
+#;(define (mathpar txt)
   (t txt))
 
 (slide
@@ -75,11 +77,20 @@
  'next
  @subitem{Checking mode: @${\Gamma \vdash e \Leftarrow A}}
  'next
+ @item{Mode-correct bidirectional type systems can be directly implemented;} 
+ 'next
+ @haskell{
+ infer :: Env -> Term -> Type
+ check :: Env -> Term -> Type -> Bool
+          }
+  'next
  @item{Types are propogated to neighbouring expressions;}
+ ;'next
+ ;@mathpar[#:scale 3]{\inferrule*[right=Ann]{\Gamma \vdash e \Leftarrow A}{\Gamma \vdash (e : A) \Rightarrow A}}
  )
 
 (slide
- #:title "Bidirectional Typing: Problems Statement"
+ #:title "Bidirectional Typing: Problems"
  @item{Trade-off between expressive power and backtracking;}
  @subitem{more expressive, less syntax-directness;}
  @subitem{all-or-nothing inference strategy;}
@@ -94,7 +105,7 @@
  @subitem{tells you where the annotations are needed;}
  @subitem{parametrised with a counter: @${\Gamma \vdash_n e : A}}
  (blank)
- @item{Syntax-directed algorithmic Type Systems}
+ @item{Syntax-directed Algorithmic Type Systems;}
  @subitem{is decidable;}
  @subitem{parametrised with a context: @${\Gamma \vdash \Sigma \Rightarrow e \Rightarrow A}}
  )
@@ -121,4 +132,10 @@
  @item{Contextual typing is a lightweight approach to type inference}
  @subitem{that exploits partially known contextual information;}
  @item{It enables several improvements over bidirectional typing}
+ )
+
+(slide
+ #:title "Code Block"
+ (haskell "infer :: Int -> Int -> Int\n
+infer n1 n2 = n1 + n2")
  )
