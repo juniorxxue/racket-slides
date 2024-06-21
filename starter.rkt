@@ -88,6 +88,7 @@
  ;'next
  ;@mathpar[#:scale 3]{\inferrule*[right=Ann]{\Gamma \vdash e \Leftarrow A}{\Gamma \vdash (e : A) \Rightarrow A}}
  )
+ 
 
 (slide
  #:title "Bidirectional Typing: Problems"
@@ -109,6 +110,15 @@
  @subitem{is decidable;}
  @subitem{parametrised with a context: @${\Gamma \vdash \Sigma \Rightarrow e \Rightarrow A}}
  )
+
+
+(slide
+ #:title "QTAS: STLC"
+ (mathpar #:scale 3 (file->string "stlc-qtas.tex")))
+
+(slide
+ #:title "Algo: STLC"
+ (mathpar #:scale 3 (file->string "stlc-algo.tex")))
 
 (slide
  @titlet{Soundness}

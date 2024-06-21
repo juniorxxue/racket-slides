@@ -1,0 +1,30 @@
+\inferrule*[lab=\texttt{ALit}]
+{ }
+{\Gamma \vdash \square \Rightarrow i \Rightarrow \texttt{Int}}
+
+\inferrule*[lab=\texttt{AVar}]
+{x : A \in \Gamma}
+{\Gamma \vdash \square \Rightarrow x \Rightarrow A}
+
+\inferrule*[lab=\texttt{AAnn}]
+{\Gamma \vdash A \Rightarrow e \Rightarrow B}
+{\Gamma \vdash \square \Rightarrow e : A \Rightarrow A}
+
+\inferrule*[lab=\texttt{AApp}]
+{\Gamma \vdash \boxed{e_2} \mapsto \Sigma \Rightarrow e_1 \Rightarrow A \rightarrow B}
+{\Gamma \vdash \Sigma \Rightarrow e_1~e_2 \Rightarrow B}
+
+\inferrule*[lab=\texttt{ALam1}]
+{\Gamma, x : A \vdash B \Rightarrow e \Rightarrow C}
+{\Gamma \vdash A \rightarrow B \Rightarrow \lambda x.~e \Rightarrow A \rightarrow C}
+
+\inferrule*[lab=\texttt{ALam2}]
+{\Gamma \vdash \square \Rightarrow e_2 \Rightarrow A \\
+ \Gamma , x : A \vdash \Sigma \Rightarrow e \Rightarrow B}
+{\Gamma \vdash \boxed{e_2} \mapsto \Sigma \Rightarrow \lambda x.~e \Rightarrow A \rightarrow B}
+
+\inferrule*[lab=\texttt{ASub}]
+{\Gamma \vdash \square \Rightarrow g \Rightarrow A \\
+ \Sigma \neq \square \\
+  A \approx \Sigma}
+{\Gamma \vdash \Sigma \Rightarrow g \Rightarrow A}

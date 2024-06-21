@@ -1,0 +1,30 @@
+\inferrule*[lab=\texttt{DLit}]
+{ }
+{\Gamma \vdash_0 i : \texttt{Int}}
+
+\inferrule*[lab=\texttt{DVar}]
+{x : A \in \Gamma}
+{\Gamma \vdash_0 x : A}
+
+\inferrule*[lab=\texttt{DAnn}]
+{\Gamma \vdash_{\infty} e : A}
+{\Gamma \vdash_0 (e : A) : A}
+
+\inferrule*[lab=\texttt{DLam}]
+{\Gamma, x : A \vdash_{\infty} e : B}
+{\Gamma \vdash_{\infty} \lambda x.~ e : A \rightarrow B}
+
+\inferrule*[lab=\texttt{DApp1}]
+{\Gamma \vdash_0 e_1 : A \rightarrow B \\
+\Gamma \vdash_{\infty} e_2 : A}
+{\Gamma \vdash_0 e_1~e_2 : B}
+
+\inferrule*[lab=\texttt{DApp2}]
+{\Gamma \vdash_{\infty} e_1 : A \rightarrow B \\
+\Gamma \vdash_0 e_2 : A}
+{\Gamma \vdash_{\infty} e_1~e_2 : B}
+
+\inferrule*[lab=\texttt{DSub}]
+{\Gamma \vdash_0 e : A \\
+    A = B}
+{\Gamma \vdash_{\infty} e : B}
